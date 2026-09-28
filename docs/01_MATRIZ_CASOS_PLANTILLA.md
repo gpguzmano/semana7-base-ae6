@@ -11,3 +11,6 @@
 | CP-07 | Descuentos | Cliente ESTUDIANTE | "ESTUDIANTE", 100.0 | 90.0 | Alternativo | No aplicar el 10% de descuento correspondiente |
 | CP-08 | Descuentos | Total base en cero | "VIP", 0.0 | 0.0 | Límite | Error aritmético en importe de valor cero |
 | CP-09 | Descuentos | Total base negativo | "NORMAL", -1.0 | IllegalArgumentException | Inválido | Procesar un valor negativo sin lanzar excepción |
+| CP-10 | Confirmación | Reserva disponible | Reserva("R-001", "NORMAL") + Disponibilidad true | Reserva CONFIRMADA, guarda y notifica | Normal | No persistir ni notificar reservas válidas disponibles |
+| CP-11 | Confirmación | Sin disponibilidad | Reserva("R-002", "NORMAL") + Disponibilidad false | IllegalStateException | Alternativo | Persistir o notificar reservas sin horario disponible |
+| CP-12 | Confirmación | Reserva nula | null | IllegalArgumentException | Inválido | Procesar reserva nula o invocar dependencias con argumento nulo |
