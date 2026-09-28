@@ -1,10 +1,17 @@
 package edu.uees.testing.service;
 
+import edu.uees.testing.availability.DisponibilidadClient;
+import edu.uees.testing.domain.EstadoReserva;
+import edu.uees.testing.domain.Reserva;
+import edu.uees.testing.notification.Notificador;
+import edu.uees.testing.repository.ReservaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 class ReservaServiceTest {
 
@@ -12,140 +19,145 @@ class ReservaServiceTest {
 
     @BeforeEach
     void setUp() {
-        // En este laboratorio instanciamos ReservaService pasando null en sus dependencias
-        // porque puedeCancelar y calcularTotal son métodos puros (no usan colaboradores externos).
+        // Instancia base sin colaboradores para métodos puros
         servicio = new ReservaService(null, null, null);
     }
 
     // ==========================================
-    // PRUEBAS DE CANCELACIÓN (puedeCancelar)
+    // REGLA 1: CANCELACIÓN (puedeCancelar)
     // ==========================================
 
     @Test
     @DisplayName("CP-01: Cancelar con 5 horas de anticipación es permitido")
     void cincoHorasPermitenCancelar() {
-        // Arrange
-        int horas = 5;
-
-        // Act
-        boolean resultado = servicio.puedeCancelar(horas);
-
-        // Assert
-        assertTrue(resultado);
+        assertTrue(servicio.puedeCancelar(5));
     }
 
     @Test
     @DisplayName("CP-02: Cancelar con 2 horas exactas de anticipación es el límite permitido")
     void dosHorasEsElLimitePermitido() {
-        // Arrange
-        int horas = 2;
-
-        // Act
-        boolean resultado = servicio.puedeCancelar(horas);
-
-        // Assert
-        assertTrue(resultado);
+        assertTrue(servicio.puedeCancelar(2));
     }
 
     @Test
     @DisplayName("CP-03: Cancelar con 1 hora de anticipación no es permitido")
     void unaHoraNoPermiteCancelar() {
-        // Arrange
-        int horas = 1;
-
-        // Act
-        boolean resultado = servicio.puedeCancelar(horas);
-
-        // Assert
-        assertFalse(resultado);
+        assertFalse(servicio.puedeCancelar(1));
     }
 
     @Test
     @DisplayName("CP-04: Cancelar sin anticipación (0 horas) no es permitido")
     void ceroHorasNoPermiteCancelar() {
-        // Arrange
-        int horas = 0;
-
-        // Act
-        boolean resultado = servicio.puedeCancelar(horas);
-
-        // Assert
-        assertFalse(resultado);
+        assertFalse(servicio.puedeCancelar(0));
     }
 
     // ==========================================
-    // PRUEBAS DE DESCUENTOS (calcularTotal)
+    // REGLA 2: DESCUENTOS (calcularTotal)
     // ==========================================
 
     @Test
     @DisplayName("CP-05: Tipo NORMAL no recibe descuento")
     void normalNoRecibeDescuento() {
-        // Arrange
-        String tipo = "NORMAL";
-        double totalBase = 100.0;
-
-        // Act
-        double totalCalculado = servicio.calcularTotal(tipo, totalBase);
-
-        // Assert
-        assertEquals(100.0, totalCalculado, 0.001);
+        assertEquals(100.0, servicio.calcularTotal("NORMAL", 100.0), 0.001);
     }
 
     @Test
     @DisplayName("CP-06: Tipo VIP recibe el 15% de descuento")
     void vipRecibeQuincePorCiento() {
-        // Arrange
-        String tipo = "VIP";
-        double totalBase = 100.0;
-
-        // Act
-        double totalCalculado = servicio.calcularTotal(tipo, totalBase);
-
-        // Assert
-        assertEquals(85.0, totalCalculado, 0.001);
+        assertEquals(85.0, servicio.calcularTotal("VIP", 100.0), 0.001);
     }
 
     @Test
     @DisplayName("CP-07: Tipo ESTUDIANTE recibe el 10% de descuento")
     void estudianteRecibeDiezPorCiento() {
-        // Arrange
-        String tipo = "ESTUDIANTE";
-        double totalBase = 100.0;
-
-        // Act
-        double totalCalculado = servicio.calcularTotal(tipo, totalBase);
-
-        // Assert
-        assertEquals(90.0, totalCalculado, 0.001);
+        assertEquals(90.0, servicio.calcularTotal("ESTUDIANTE", 100.0), 0.001);
     }
 
     @Test
     @DisplayName("CP-08: Un total base de cero retorna cero sin importar el descuento")
     void totalBaseCeroRetornaCero() {
-        // Arrange
-        String tipo = "VIP";
-        double totalBase = 0.0;
-
-        // Act
-        double totalCalculado = servicio.calcularTotal(tipo, totalBase);
-
-        // Assert
-        assertEquals(0.0, totalCalculado, 0.001);
+        assertEquals(0.0, servicio.calcularTotal("VIP", 0.0), 0.001);
     }
 
     @Test
     @DisplayName("CP-09: Un total base negativo lanza IllegalArgumentException")
     void totalNegativoEsInvalido() {
-        // Arrange
-        String tipo = "NORMAL";
-        double totalBase = -1.0;
-
-        // Act & Assert
         IllegalArgumentException ex = assertThrows(
                 IllegalArgumentException.class,
-                () -> servicio.calcularTotal(tipo, totalBase)
+                () -> servicio.calcularTotal("NORMAL", -1.0)
+        );
+        assertEquals("Total base inválido", ex.getMessage());
+    }
+
+    // ==========================================
+    // REGLA 3: CONFIRMACIÓN (confirmar)
+    // ==========================================
+
+    @Test
+    @DisplayName("CP-10: Reserva disponible se confirma, se guarda y se notifica")
+    void reservaDisponibleSeConfirmaGuardaYNotifica() {
+        // Arrange
+        DisponibilidadClient disponibilidad = mock(DisponibilidadClient.class);
+        ReservaRepository repository = mock(ReservaRepository.class);
+        Notificador notificador = mock(Notificador.class);
+
+        // Stub: simular que la reserva está disponible
+        when(disponibilidad.estaDisponible(any())).thenReturn(true);
+
+        ReservaService servicioConDobles = new ReservaService(disponibilidad, repository, notificador);
+        Reserva reserva = new Reserva("R-001", "NORMAL");
+
+        // Act
+        servicioConDobles.confirmar(reserva);
+
+        // Assert
+        assertEquals(EstadoReserva.CONFIRMADA, reserva.getEstado());
+        verify(repository).guardar(reserva);
+        verify(notificador).enviarConfirmacion(reserva);
+    }
+
+    @Test
+    @DisplayName("CP-11: Reserva no disponible lanza excepción, NO se guarda ni notifica")
+    void reservaNoDisponibleNoSeGuardaNiNotifica() {
+        // Arrange
+        DisponibilidadClient disponibilidad = mock(DisponibilidadClient.class);
+        ReservaRepository repository = mock(ReservaRepository.class);
+        Notificador notificador = mock(Notificador.class);
+
+        // Stub: simular que NO hay disponibilidad
+        when(disponibilidad.estaDisponible(any())).thenReturn(false);
+
+        ReservaService servicioConDobles = new ReservaService(disponibilidad, repository, notificador);
+        Reserva reserva = new Reserva("R-002", "NORMAL");
+
+        // Act & Assert
+        assertThrows(
+                IllegalStateException.class,
+                () -> servicioConDobles.confirmar(reserva)
         );
 
-        assertEquals("Total base inválido", ex.getMessage());
+        verify(repository, never()).guardar(any());
+        verify(notificador, never()).enviarConfirmacion(any());
+    }
+
+    @Test
+    @DisplayName("CP-12: Reserva nula lanza excepción y NO consulta ninguna dependencia")
+    void reservaNulaNoConsultaDependencias() {
+        // Arrange
+        DisponibilidadClient disponibilidad = mock(DisponibilidadClient.class);
+        ReservaRepository repository = mock(ReservaRepository.class);
+        Notificador notificador = mock(Notificador.class);
+
+        ReservaService servicioConDobles = new ReservaService(disponibilidad, repository, notificador);
+
+        // Act & Assert
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> servicioConDobles.confirmar(null)
+        );
+
+        verify(disponibilidad, never()).estaDisponible(any());
+        verify(repository, never()).guardar(any());
+        verify(notificador, never()).enviarConfirmacion(any());
     }
 }
